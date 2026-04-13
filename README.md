@@ -1,1 +1,228 @@
-# multiplication-food
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>乘法厨房大亨 - 阶梯挑战版</title>
+    <style>
+        :root { 
+            --main-orange: #E67E22; --chef-red: #E74C3C; --kitchen-blue: #3498DB; 
+            --marble: #FFFDF5; --panel-bg: #F5F5F5; --equation-bg: #FFFFFF; --text-dark: #333333;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; margin: 0; height: 100vh; display: flex; overflow: hidden; background: #f0f0f0; }
+        
+        /* 启动主页 & 结算面板 */
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.92); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center;
+        }
+        .btn {
+            padding: 20px 50px; font-size: 30px; cursor: pointer; border: none; border-radius: 50px; 
+            color: white; font-weight: bold; margin: 10px; transition: 0.2s;
+        }
+        .btn-orange { background: var(--main-orange); box-shadow: 0 8px 0 #b36b00; }
+        .btn-blue { background: var(--kitchen-blue); box-shadow: 0 8px 0 #2980B9; font-size: 24px; }
+        .btn:active { transform: translateY(4px); box-shadow: 0 4px 0 #b36b00; }
+
+        #game-layout { 
+            display: flex; width: 100vw; height: 100vh; filter: blur(5px); pointer-events: none;
+            background: radial-gradient(at top, #fff 20%, #ddd 80%),
+                url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><rect width="40" height="40" fill="%23fff"/><rect width="20" height="20" fill="%23fcfcfc"/><rect y="20" width="20" height="20" fill="%23fcfcfc"/><rect x="20" width="20" height="20" fill="%23fcfcfc"/></svg>');
+            background-size: cover, 40px 40px;
+        }
+        
+        #customer-zone { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; border-right: 5px solid #ddd; position: relative; background: linear-gradient(to bottom, transparent 50%, var(--marble) 100%); }
+        .stats-bar { position: absolute; top: 30px; left: 30px; color: var(--text-dark); font-size: 28px; font-weight: bold; background: rgba(255,255,255,0.8); padding: 10px 20px; border-radius: 15px; border: 1px solid #eee; }
+        #food-display { font-size: 180px; filter: drop-shadow(0 15px 20px rgba(0,0,0,0.2)); transition: 0.3s; margin-bottom: 20px; }
+        .speech-bubble { background: #fff; padding: 30px; border-radius: 30px; width: 85%; max-width: 480px; font-size: 26px; line-height: 1.5; box-shadow: 0 10px 0 #E0E0E0; position: relative; color: #333; border: 2px solid #ddd; }
+        .speech-bubble::after { content: ''; position: absolute; top: -20px; left: 50%; border: 10px solid transparent; border-bottom-color: #fff; }
+        
+        #kitchen-panel { width: 500px; background: var(--panel-bg); padding: 45px; display: flex; flex-direction: column; justify-content: center; border-left: 5px solid #E0E0E0; }
+        .equation-box { background: var(--equation-bg); color: var(--main-orange); font-size: 55px; text-align: center; padding: 30px; border-radius: 25px; margin-bottom: 40px; border: 3px solid #ddd; }
+        .num-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .num-btn { height: 90px; font-size: 36px; font-weight: bold; cursor: pointer; border: none; border-radius: 18px; background: var(--kitchen-blue); color: white; box-shadow: 0 10px 0 #2980B9; }
+        .num-btn:active { transform: translateY(5px); box-shadow: 0 3px 0 #2980B9; }
+        
+        .food-success { animation: foodBounce 0.6s; }
+        .food-fail { animation: foodShake 0.5s; }
+        @keyframes foodShake { 0%, 100% {transform:translateX(0);} 20%{transform:translateX(-20px) rotate(-10deg);} 60%{transform:translateX(20px) rotate(10deg);} }
+        @keyframes foodBounce { 0%, 100% {transform:scale(1);} 30%{transform:scale(1.3) translateY(-20px);} 60%{transform:scale(0.9) translateY(10px);} }
+    </style>
+</head>
+<body>
+
+<div id="start-overlay" class="overlay">
+    <h1 style="font-size: 60px; margin: 0;">👩‍🍳 乘法厨房大亨 👨‍🍳</h1>
+    <p style="font-size: 24px; margin: 20px 0;">赚取 100 金币开启主厨之路</p>
+    <button class="btn btn-orange" onclick="startGame()">🔊 开启厨房</button>
+</div>
+
+<div id="win-overlay" class="overlay" style="display: none;">
+    <h1 id="win-title" style="font-size: 50px; color: gold;">🏆 第一阶段达成！</h1>
+    <p id="win-msg" style="font-size: 26px; margin-bottom: 30px;">当前收入: 100 金币</p>
+    <div style="display: flex;">
+        <button id="next-goal-btn" class="btn btn-orange" onclick="continueChallenge()">继续挑战 300分</button>
+        <button class="btn btn-blue" onclick="location.reload()">结束挑战</button>
+    </div>
+</div>
+
+<div id="game-layout">
+    <div id="customer-zone">
+        <div class="stats-bar">
+            💰 收入: <span id="score" style="color:var(--main-orange)">0</span> / <span id="target-ui">100</span> &nbsp;&nbsp; 
+            ❤️ 耐心: <span id="lives" style="color:var(--chef-red)">3</span>
+        </div>
+        <div id="food-display">🍔</div>
+        <div class="speech-bubble" id="dialog">正在为您寻找顾客...</div>
+    </div>
+    <div id="kitchen-panel">
+        <div class="equation-box">
+            <span id="n1">?</span> × <span style="color:#333; border-bottom:5px solid #333">?</span> = <span id="res">?</span>
+        </div>
+        <div class="num-pad" id="pad"></div>
+    </div>
+</div>
+
+<script>
+    let score = 0; let lives = 3; let correctAns = 0;
+    let audioCtx;
+    let currentTarget = 100;
+
+    function initAudio() {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        startBGM();
+    }
+
+    function startBGM() {
+        const notes = [261.63, 392.00, 329.63, 523.25, 392.00, 440.00]; 
+        let step = 0;
+        setInterval(() => {
+            if (lives <= 0 || document.getElementById('win-overlay').style.display === 'flex') return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square'; 
+            osc.frequency.setValueAtTime(notes[step % notes.length], audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.06, audioCtx.currentTime); 
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+            step++;
+        }, 350); 
+    }
+
+    function playEffect(freq, type, dur, vol = 0.4) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + dur);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + dur);
+    }
+
+    function startGame() {
+        document.getElementById('start-overlay').style.display = 'none';
+        document.getElementById('game-layout').style.filter = 'none';
+        document.getElementById('game-layout').style.pointerEvents = 'all';
+        if(!audioCtx) initAudio();
+        nextLevel();
+    }
+
+    const menus = [
+        {txt: "薯条大份！总共 {res} 根，每盒 {n1} 根，装几盒？", emoji: "🍟"},
+        {txt: "披萨拼盘！我要 {res} 片！每个切成 {n1} 片，切几个？", emoji: "🍕"},
+        {txt: "甜甜圈派对！需要 {res} 个，每盒装 {n1} 个，买几盒？", emoji: "🍩"},
+        {txt: "冰淇淋塔总高 {res} 厘米，球高 {n1} 厘米，叠几层？", emoji: "🍦"},
+        {txt: "蛋糕一共 {res} 块，每层切 {n1} 块，一共几层？", emoji: "🍰"},
+        {txt: "寿司一共 {res} 个，每条切 {n1} 个，切几条？", emoji: "🍣"}
+    ];
+
+    function nextLevel() {
+        const n1 = Math.floor(Math.random() * 8) + 2; 
+        correctAns = Math.floor(Math.random() * 9) + 1; 
+        const res = n1 * correctAns;
+        const menu = menus[Math.floor(Math.random() * menus.length)];
+        document.getElementById('dialog').innerText = menu.txt.replace('{res}', res).replace('{n1}', n1);
+        document.getElementById('food-display').innerText = menu.emoji;
+        document.getElementById('n1').innerText = n1;
+        document.getElementById('res').innerText = res;
+    }
+
+    function guess(val) {
+        const foodDisp = document.getElementById('food-display');
+        foodDisp.classList.remove('food-success', 'food-fail');
+        void foodDisp.offsetWidth;
+
+        if (val === correctAns) {
+            score += 20;
+            document.getElementById('score').innerText = score;
+            foodDisp.classList.add('food-success');
+            
+            if (score >= currentTarget) {
+                showWinPanel();
+            } else {
+                playEffect(523, 'sine', 0.15, 0.4); 
+                setTimeout(() => playEffect(659, 'sine', 0.15, 0.4), 100);
+                setTimeout(nextLevel, 1000);
+            }
+        } else {
+            lives--;
+            document.getElementById('lives').innerText = lives;
+            foodDisp.classList.add('food-fail');
+            playEffect(150, 'sawtooth', 0.4, 0.5);
+            if (lives <= 0) { 
+                alert("Game Over! 厨师耐心耗尽了！"); 
+                location.reload(); 
+            }
+        }
+    }
+
+    function showWinPanel() {
+        playEffect(523, 'sine', 0.2, 0.5);
+        setTimeout(() => playEffect(1046, 'sine', 0.5, 0.5), 200);
+        
+        const winOverlay = document.getElementById('win-overlay');
+        const nextBtn = document.getElementById('next-goal-btn');
+        
+        document.getElementById('win-msg').innerText = `当前总收入: ${score} 金币`;
+        
+        if (currentTarget === 100) {
+            document.getElementById('win-title').innerText = "🏆 金牌厨师达成！";
+            nextBtn.innerText = "继续挑战 300分";
+        } else if (currentTarget === 300) {
+            document.getElementById('win-title').innerText = "🌟 厨房大亨达成！";
+            nextBtn.innerText = "继续挑战 500分";
+        } else {
+            document.getElementById('win-title').innerText = "🔥 传奇主厨诞生！";
+            nextBtn.style.display = 'none';
+        }
+        
+        winOverlay.style.display = 'flex';
+        document.getElementById('game-layout').style.filter = 'blur(5px)';
+        document.getElementById('game-layout').style.pointerEvents = 'none';
+    }
+
+    function continueChallenge() {
+        if (currentTarget === 100) currentTarget = 300;
+        else if (currentTarget === 300) currentTarget = 500;
+        
+        document.getElementById('target-ui').innerText = currentTarget;
+        document.getElementById('win-overlay').style.display = 'none';
+        document.getElementById('game-layout').style.filter = 'none';
+        document.getElementById('game-layout').style.pointerEvents = 'all';
+        nextLevel();
+    }
+
+    const pad = document.getElementById('pad');
+    for (let i = 1; i <= 9; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'num-btn'; btn.innerText = i;
+        btn.onclick = () => guess(i);
+        pad.appendChild(btn);
+    }
+</script>
+</body>
+</html>
